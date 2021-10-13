@@ -1,1 +1,17 @@
 
+Problem: PCR amplification during library prep generates duplicates of reads that need to be removed because, if they are not, they can either misrepresent gene expression or cause issues with genome assembly. 
+
+Example input file name: 
+Example output file name:
+
+Preprocessing:
+  In order for my script to work, the sam file must be ordered by start position.
+  This can be assomplished by running the command 'cat <samfile> | samtools sort -u -O SAM > <outputname>.sam'
+
+
+Pseudocode:
+  
+
+
+
+High level functions:
