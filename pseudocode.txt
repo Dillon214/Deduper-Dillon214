@@ -5,13 +5,99 @@ Example input file name:
 Example output file name:
 
 Preprocessing:
-  In order for my script to work, the sam file must be ordered by start position.
-  This can be assomplished by running the command 'cat <samfile> | samtools sort -u -O SAM > <outputname>.sam'
+  In order for my script to work, the sam file must be ordered by start position. Conveniently, this also orders by chromosome as well. 
+  This can be accomplished by running the command 'cat <samfile> | samtools sort -u -O SAM > <outputname>.sam'
 
-
+  input file must also be unzipped 
+  
 Pseudocode:
   
+  Brief explanation of general strategy:
+  Just like in demultiplexing, I went for a line by line approach. 
+  Iterates through sorted file, and does nothing until it hits a sequence of 2 or greater lines with equal positions
+  The code will pay special attention to these sequences with identical positions
+  For every line in these sections, it will either log its important info into a dictionary (umi, strand, rev_comp status, and soft-clipping adjusted position) and set value to   that line
+  ...or it will simply move on if the important info of said line already exists in the dictionary
+  when the sequence of identical positions is broken, then the lines in the dictionary values are written to the output file and the dictionary is reset to {}
+  metaphorically, it's like a bucket of unique (and therefore deduplicated) lines repeatedly filling up and pouring out
+  Aside from other approaches being superior, there is one major issue with the approach I see: what if the bucket overflows?
+  This is possible if the a sequence of same-position lines has too many uniques in it. 
+  My tests with the data shows that this is not often the case, but can sometimes get large (700+ unique key value pairs in the bucket at times)
+  I still have to plan out how to handle paired end data, and other features which could improve usability. 
+  The pseodocode below is indented the same way I hope to indent the actual code. 
+  
+  
+  
+  set up argparse options
+  open input file
+  open output file (this will just be the inputfile filename with '_deduplicated' added
+  
+  
+  before heading into the main loop, establish a few variables with default values
+  
+  last_line = 0
+  last_position = 0
+  continuous = False
+  unique_dict = {}
+  
+  
+  for line in file:
+    check if the line does not start with an '@', if it does, write to output and move on to the next line.
+    
+    If the line does not start with an '@', define 2 new variables linesep (simply separate current line by tab) and position (should be the 4th element of linesep)
+    
+    then, check if position is equal to last_position:
+      first, check if continous is false:
+        if continuous is false, then we will flip continuous to True and add the important features of last_line (these important features are umi, strand, rev_comp status, and         soft-clipping adjusted position) to unique_dict as a key and set the value to the last_line
+      if continuous is true, move on
+      
+      
+      
+      next, generate the same important features for the current line 
+        
+      if unique dict contains an exact copy of the important features of the current line, 
+        then do nothing and move on to the next line (this is where I will implement quality selection in the future, also a good spot to flip bitwise flag) 
+      if it does not contain an exact copy of the important features, 
+        then add a the important features of the current line to unique_dict as a key and set the value to the current line
+     
+      
+    if last_position does not equal current position:
+      if continuous is false:
+        write lase_line to the output file
+      if continuous is true:
+        write all unique lines in unique_dict to the output file
+        set unique dict to {}
+        set continuous to false
+        
+      set last_line to current line
+      set last_position to current position
+      
 
+
+End product notes: The end product should be a new sam file which is ordered and devoid of PCR duplicates. Old file is retained. 
 
 
 High level functions:
+
+So far, I am only thinking about using a single function for my program, but more could be added as I attempt paired end reads. 
+
+find_features(listL: tab_split_sam_line, tuple: known_UMIs, Boolean: Use_UMI, Boolean: Pairedend)
+this function will take in a sam read, optionally a list of known UMIs, a boolean for whether said UMIs will actually be used, and a boolean indicating whether the library is paired end. 
+It will return a tuple of important features (UMI, Soft-clipping adjusted position, and rev_comp_status from the bitwise flag)
+if the umi found in the read is not in the known UMIs, then a False is returned (indicating a bad UMI, which will cause read to be discarded)
+if no Umi file is provided (randomers), then this situation will never occur
+
+Sample input: 
+NS500451:154:HWKTMBGXX:1:11112:15171:8303:GACATGAG      99      2       3072018 36      71M     =       3081346 9399    GTTTAGGTATGGGCCTTGAATTCCTGATCTTTCCAAAACTTTTATCATGAATGGGTGTTGGATCTTGTCAA EEEEEEEEEEEEEEEEEEEEEEEEEEAEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE MD:Z:71 NH:i:1  HI:i:1  NM:i:0  SM:i:36 XQ:i:40 X2:i:0  XO:Z:CU
+
+(Imagine the above is tab separated) 
+
+Sample output: 
+(GACATGAG, 3072018, True)
+
+or if the umi was not in the list of known umis...
+
+False
+
+
+
